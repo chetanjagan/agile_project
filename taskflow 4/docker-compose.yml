@@ -1,0 +1,71 @@
+version: "3.9"
+
+# ──────────────────────────────────────────────────────────
+#  TaskFlow — Docker Compose for LOCAL DEVELOPMENT
+#  Usage:
+#    docker compose up --build          # start everything
+#    docker compose up -d               # detached (background)
+#    docker compose down                # stop and remove containers
+#    docker compose logs -f taskflow    # follow logs
+# ──────────────────────────────────────────────────────────
+
+services:
+
+  # ── Main Application ──────────────────────────────────
+  taskflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime        # use the lean runtime stage
+    container_name: taskflow-app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"          # host:container
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=0
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-change-in-production}
+      - DATABASE_URL=sqlite:////app/instance/taskflow.db
+    volumes:
+      # Persist the SQLite database between restarts
+      - taskflow-data:/app/instance
+      # Hot-reload: mount source for dev (comment out for prod)
+      - ./:/app:ro
+    networks:
+      - taskflow-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    labels:
+      - "com.taskflow.service=web"
+      - "com.taskflow.version=1.0.0"
+
+  # ── Nginx Reverse Proxy ───────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: taskflow-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"              # serve on port 80
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      taskflow:
+        condition: service_healthy
+    networks:
+      - taskflow-net
+    labels:
+      - "com.taskflow.service=proxy"
+
+# ── Named Volumes ──────────────────────────────────────
+volumes:
+  taskflow-data:
+    driver: local
+
+# ── Networks ───────────────────────────────────────────
+networks:
+  taskflow-net:
+    driver: bridge

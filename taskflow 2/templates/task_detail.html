@@ -1,0 +1,363 @@
+{% extends 'base.html' %}
+{% block title %}{{ task.title }} – TaskFlow{% endblock %}
+{% block topbar_title %}Task Detail{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div style="display:flex;gap:24px;align-items:flex-start;">
+    <!-- Left: Task detail -->
+    <div style="flex:1;">
+      <!-- Breadcrumb -->
+      <div style="font-size:12px;color:var(--text3);margin-bottom:16px;display:flex;align-items:center;gap:6px;">
+        <a href="/tasks" style="color:var(--text3);">Tasks</a>
+        {% if task.project %} › <a href="/projects/{{ task.project_id }}" style="color:var(--text3);">{{ task.project.name }}</a>{% endif %}
+        › <span style="color:var(--text2);">{{ task.title[:40] }}{% if task.title|length>40 %}…{% endif %}</span>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        {% if not can_write_ws %}
+        <div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--amber);display:flex;align-items:center;gap:8px;">
+          👁 <strong>View only</strong> — You are a <em>Viewer</em> in this workspace. You can read but not edit tasks.
+        </div>
+        {% endif %}
+        <form method="POST" action="/tasks/{{ task.id }}/update">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
+            <input type="text" name="title" value="{{ task.title }}" 
+                   class="form-control" style="font-family:var(--font);font-size:22px;font-weight:800;border:none;background:none;padding:0;font-size:20px;" required>
+            <div style="display:flex;gap:8px;flex-shrink:0;margin-left:12px;">
+              {% if can_write_ws %}
+              <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Save</button>
+              <form method="POST" action="/tasks/{{ task.id }}/delete" onsubmit="return confirm('Delete?')">
+                <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
+              </form>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea name="description" class="form-control" rows="4" placeholder="Add a description…">{{ task.description or '' }}</textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Status</label>
+              <select name="status" class="form-control">
+                {% for s in ['todo','in_progress','review','done'] %}
+                <option value="{{ s }}" {% if task.status==s %}selected{% endif %}>{{ s.replace('_',' ').title() }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Priority</label>
+              <select name="priority" class="form-control">
+                {% for p in ['low','medium','high','critical'] %}
+                <option value="{{ p }}" {% if task.priority==p %}selected{% endif %}>{{ p.title() }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Deadline</label>
+              <input type="datetime-local" name="deadline" class="form-control"
+                     value="{{ task.deadline.strftime('%Y-%m-%dT%H:%M') if task.deadline else '' }}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Assign To</label>
+              <select name="assignee_id" class="form-control">
+                {% for m in members %}
+                <option value="{{ m.id }}" {% if m.id==task.assignee_id %}selected{% endif %}>{{ m.avatar }} {{ m.username }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Project</label>
+              <select name="project_id" class="form-control">
+                <option value="">— None —</option>
+                {% for p in projects %}
+                <option value="{{ p.id }}" {% if task.project_id==p.id %}selected{% endif %}>{{ p.emoji }} {{ p.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Tags</label>
+              <input type="text" name="tags" class="form-control" value="{{ task.tags or '' }}" placeholder="tag1, tag2">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Est. Hours</label>
+              <input type="number" name="estimated_h" class="form-control" value="{{ task.estimated_h }}" step="0.5" min="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Story Points</label>
+              <select name="story_points" class="form-control">
+                {% for sp in [1,2,3,5,8,13] %}
+                <option value="{{ sp }}" {% if task.story_points==sp %}selected{% endif %}>{{ sp }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Progress ({{ task.progress }}%)</label>
+            <input type="range" name="progress" min="0" max="100" value="{{ task.progress }}" 
+                   class="form-control" style="padding:4px 0;" oninput="this.previousElementSibling.textContent='Progress ('+this.value+'%)'">
+          </div>
+        </form>
+      </div>
+
+      <!-- Subtasks -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="flex-between" style="margin-bottom:16px;">
+          <div style="font-family:var(--font);font-size:16px;font-weight:700;">Subtasks</div>
+          <span class="chip">{{ task.subtasks|selectattr('done')|list|length }}/{{ task.subtasks|length }}</span>
+        </div>
+        {% if task.subtasks %}
+        <div id="subtask-list">
+          {% for s in task.subtasks %}
+          <div class="flex gap-8" style="padding:8px 0;border-bottom:1px solid var(--border);" id="sub-{{ s.id }}">
+            <div class="task-check {% if s.done %}done{% endif %}" style="cursor:pointer;" onclick="toggleSubtask({{ s.id }})">
+              {% if s.done %}<i class="fas fa-check" style="font-size:9px;color:#fff;"></i>{% endif %}
+            </div>
+            <span style="font-size:13px;{% if s.done %}text-decoration:line-through;color:var(--text3);{% endif %}">{{ s.title }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if can_write_ws %}
+        <div style="margin-top:12px;display:flex;gap:8px;">
+          <input type="text" id="new-subtask" class="form-control" placeholder="Add a subtask…" onkeydown="if(event.key==='Enter'){addSubtask();}">
+          <button class="btn btn-primary btn-sm" onclick="addSubtask()"><i class="fas fa-plus"></i></button>
+        </div>
+        {% endif %}
+        {% if task.subtasks %}
+        <div class="progress-bar" style="margin-top:12px;">
+          <div class="progress-fill" id="subtask-progress" style="width:{{ task.progress }}%"></div>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Time Tracker -->
+      <div class="card" style="margin-bottom:16px;">
+        <div style="font-family:var(--font);font-size:16px;font-weight:700;margin-bottom:16px;">⏱ Time Tracker</div>
+        <div class="grid-2" style="margin-bottom:16px;">
+          <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:16px;text-align:center;">
+            <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Estimated</div>
+            <div style="font-family:var(--font);font-size:24px;font-weight:800;">{{ task.estimated_h }}h</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:16px;text-align:center;">
+            <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Logged</div>
+            <div style="font-family:var(--font);font-size:24px;font-weight:800;" id="logged-h">{{ task.logged_h }}h</div>
+          </div>
+        </div>
+        {% if task.estimated_h %}
+        <div class="progress-bar" style="margin-bottom:12px;">
+          <div class="progress-fill" style="width:{{ [(task.logged_h/task.estimated_h*100)|int,100]|min }}%;background:{% if task.logged_h>task.estimated_h %}linear-gradient(90deg,var(--red),var(--pink)){% else %}linear-gradient(90deg,var(--green),var(--cyan)){% endif %}"></div>
+        </div>
+        {% endif %}
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="number" id="log-hours" class="form-control" style="width:100px;" placeholder="hours" step="0.25" min="0">
+          {% if can_write_ws %}
+          <button class="btn btn-primary btn-sm" onclick="logTime()"><i class="fas fa-clock"></i> Log Time</button>
+          <button class="btn btn-ghost btn-sm" id="timer-btn" onclick="toggleTimer()">▶ Start Timer</button>
+          {% else %}
+          <span style="font-size:11px;color:var(--text3);">👁 Time logging requires member role</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Right sidebar: Activity & Comments -->
+    <div style="width:320px;flex-shrink:0;display:flex;flex-direction:column;gap:16px;">
+      <!-- Task meta card -->
+      <div class="card">
+        <div style="font-family:var(--font);font-size:14px;font-weight:700;margin-bottom:14px;">Task Info</div>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
+          <div class="flex-between">
+            <span style="color:var(--text3);">Status</span>
+            <span class="badge badge-{{ task.status }}">{{ task.status.replace('_',' ') }}</span>
+          </div>
+          <div class="flex-between">
+            <span style="color:var(--text3);">Priority</span>
+            <span class="badge badge-{{ task.priority }}">{{ task.priority }}</span>
+          </div>
+          <div class="flex-between">
+            <span style="color:var(--text3);">Assignee</span>
+            {% if task.assignee %}
+            <span style="display:flex;align-items:center;gap:6px;">
+              <div class="avatar-sm">{{ task.assignee.avatar }}</div>
+              {{ task.assignee.username }}
+            </span>
+            {% else %}<span style="color:var(--text3);">Unassigned</span>{% endif %}
+          </div>
+          <div class="flex-between">
+            <span style="color:var(--text3);">Created by</span>
+            <span>{{ task.creator.avatar if task.creator else '?' }} {{ task.creator.username if task.creator else 'Unknown' }}</span>
+          </div>
+          <div class="flex-between">
+            <span style="color:var(--text3);">Story Points</span>
+            <span class="chip">{{ task.story_points }}</span>
+          </div>
+          {% if task.deadline %}
+          <div class="flex-between">
+            <span style="color:var(--text3);">Deadline</span>
+            <span style="font-size:12px;color:{% if task.deadline < now %}var(--red){% else %}var(--text){% endif %}">
+              {{ task.deadline.strftime('%b %d, %Y') }}
+            </span>
+          </div>
+          {% endif %}
+          {% if task.tags %}
+          <div>
+            <div style="color:var(--text3);margin-bottom:6px;">Tags</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+              {% for tag in task.tags.split(',') if tag.strip() %}
+              <span class="tag">{{ tag.strip() }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Comments -->
+      <div class="card">
+        <div style="font-family:var(--font);font-size:14px;font-weight:700;margin-bottom:14px;">
+          💬 Comments <span class="chip">{{ task.comments|length }}</span>
+        </div>
+        <div style="max-height:300px;overflow-y:auto;margin-bottom:12px;">
+          {% for comment in task.comments|sort(attribute='created') %}
+          <div style="padding:10px 0;border-bottom:1px solid var(--border);">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <div class="avatar-sm">{{ comment.author.avatar }}</div>
+              <span style="font-size:12px;font-weight:600;">{{ comment.author.username }}</span>
+              <span style="font-size:10px;color:var(--text3);margin-left:auto;">{{ comment.created.strftime('%b %d, %H:%M') }}</span>
+            </div>
+            <div style="font-size:13px;line-height:1.5;color:var(--text2);padding-left:36px;">{{ comment.body }}</div>
+          </div>
+          {% else %}
+          <div style="text-align:center;color:var(--text3);font-size:12px;padding:16px;">No comments yet</div>
+          {% endfor %}
+        </div>
+        {% if can_write_ws %}
+        <form method="POST" action="/tasks/{{ task.id }}/comment">
+          <textarea name="body" class="form-control" rows="2" placeholder="Add a comment…" required style="margin-bottom:8px;"></textarea>
+          <button type="submit" class="btn btn-primary btn-sm" style="width:100%;">Post Comment</button>
+        </form>
+        {% else %}
+        <div style="font-size:11px;color:var(--text3);text-align:center;padding:8px;">👁 Viewers cannot post comments</div>
+        {% endif %}
+      </div>
+
+      <!-- Activity Feed -->
+      <div class="card">
+        <div style="font-family:var(--font);font-size:14px;font-weight:700;margin-bottom:14px;">📝 Activity</div>
+        <div style="max-height:250px;overflow-y:auto;">
+          {% for act in task.activity|sort(attribute='created',reverse=true) %}
+          <div style="display:flex;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
+            <div class="avatar-sm" style="width:24px;height:24px;font-size:12px;">{{ act.actor.avatar if act.actor else '?' }}</div>
+            <div>
+              <span style="font-size:12px;font-weight:600;">{{ act.actor.username if act.actor else 'User' }}</span>
+              <span style="font-size:12px;color:var(--text2);"> {{ act.action }}</span>
+              <div style="font-size:10px;color:var(--text3);">{{ act.created.strftime('%b %d, %H:%M') }}</div>
+            </div>
+          </div>
+          {% else %}
+          <div style="text-align:center;color:var(--text3);font-size:12px;padding:16px;">No activity yet</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const now = new Date();
+const taskId = {{ task.id }};
+
+function addSubtask(){
+  const input = document.getElementById('new-subtask');
+  const title = input.value.trim();
+  if(!title) return;
+  fetch('/tasks/'+taskId+'/subtask',{
+    method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:'title='+encodeURIComponent(title)
+  }).then(r=>r.json()).then(s=>{
+    const list = document.getElementById('subtask-list') || (() => {
+      const el = document.createElement('div');
+      el.id='subtask-list';
+      input.parentElement.before(el);
+      return el;
+    })();
+    list.innerHTML += `<div class="flex gap-8" style="padding:8px 0;border-bottom:1px solid var(--border);" id="sub-${s.id}">
+      <div class="task-check" style="cursor:pointer;" onclick="toggleSubtask(${s.id})"></div>
+      <span style="font-size:13px;">${s.title}</span>
+    </div>`;
+    input.value='';
+    showToast('Subtask added!');
+  });
+}
+
+function toggleSubtask(id){
+  fetch('/subtask/'+id+'/toggle',{method:'POST'}).then(r=>r.json()).then(d=>{
+    const el = document.getElementById('sub-'+id);
+    const check = el.querySelector('.task-check');
+    const text = el.querySelector('span');
+    if(d.done){
+      check.classList.add('done');
+      check.innerHTML='<i class="fas fa-check" style="font-size:9px;color:#fff;"></i>';
+      text.style.textDecoration='line-through';
+      text.style.color='var(--text3)';
+    } else {
+      check.classList.remove('done');
+      check.innerHTML='';
+      text.style.textDecoration='';
+      text.style.color='';
+    }
+    const pb = document.getElementById('subtask-progress');
+    if(pb) pb.style.width = d.progress+'%';
+  });
+}
+
+function logTime(){
+  const h = document.getElementById('log-hours').value;
+  if(!h) return;
+  fetch('/tasks/'+taskId+'/log_time',{
+    method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:'hours='+h
+  }).then(r=>r.json()).then(d=>{
+    document.getElementById('logged-h').textContent = d.logged_h+'h';
+    document.getElementById('log-hours').value='';
+    showToast('Time logged: '+h+'h');
+  });
+}
+
+// Pomodoro-style timer
+let timerRunning = false, timerInterval, timerSecs = 0;
+function toggleTimer(){
+  const btn = document.getElementById('timer-btn');
+  if(!timerRunning){
+    timerRunning=true;
+    timerSecs=0;
+    timerInterval = setInterval(()=>{
+      timerSecs++;
+      const h=Math.floor(timerSecs/3600), m=Math.floor((timerSecs%3600)/60), s=timerSecs%60;
+      btn.textContent = `⏸ ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    },1000);
+  } else {
+    timerRunning=false; clearInterval(timerInterval);
+    const hours = (timerSecs/3600).toFixed(2);
+    document.getElementById('log-hours').value=hours;
+    btn.textContent='▶ Start Timer';
+    showToast('Timer stopped: '+hours+'h ready to log');
+  }
+}
+</script>
+{% endblock %}

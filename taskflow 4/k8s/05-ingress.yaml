@@ -1,0 +1,64 @@
+# ──────────────────────────────────────────────
+#  Ingress — routes external traffic into cluster
+#
+#  Requires nginx-ingress-controller installed:
+#    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
+#
+#  For local (minikube):
+#    minikube addons enable ingress
+# ──────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: taskflow-ingress
+  namespace: taskflow
+  annotations:
+    # Use nginx ingress controller
+    kubernetes.io/ingress.class: "nginx"
+    # Redirect HTTP → HTTPS automatically
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Rate limiting at ingress level
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    # Increase proxy timeout for slow requests
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    # Enable gzip compression
+    nginx.ingress.kubernetes.io/enable-gzip: "true"
+    # TLS cert via cert-manager (Let's Encrypt)
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  # TLS configuration (HTTPS)
+  tls:
+    - hosts:
+        - taskflow.yourdomain.com   # ← Replace with your domain
+      secretName: taskflow-tls     # cert-manager stores cert here
+
+  rules:
+    - host: taskflow.yourdomain.com  # ← Replace with your domain
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: taskflow-service
+                port:
+                  number: 80
+
+---
+# ──────────────────────────────────────────────
+#  For LOCAL testing without a domain:
+#  Use this NodePort service instead of Ingress
+# ──────────────────────────────────────────────
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: taskflow-nodeport
+#   namespace: taskflow
+# spec:
+#   type: NodePort
+#   selector:
+#     app: taskflow
+#   ports:
+#     - port: 80
+#       targetPort: 5000
+#       nodePort: 30080   # Access at http://localhost:30080

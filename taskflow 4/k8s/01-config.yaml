@@ -1,0 +1,39 @@
+# ──────────────────────────────────────────────
+#  ConfigMap — non-sensitive configuration
+# ──────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: taskflow-config
+  namespace: taskflow
+data:
+  FLASK_ENV: "production"
+  FLASK_DEBUG: "0"
+  DATABASE_URL: "sqlite:////app/instance/taskflow.db"
+  PORT: "5000"
+
+---
+# ──────────────────────────────────────────────
+#  Secret — sensitive values (base64 encoded)
+#
+#  HOW TO CREATE:
+#    kubectl create secret generic taskflow-secrets \
+#      --from-literal=SECRET_KEY="$(openssl rand -hex 32)" \
+#      -n taskflow
+#
+#  OR encode manually:
+#    echo -n "your-secret-key" | base64
+#
+#  DO NOT commit real secrets to git!
+#  Use sealed-secrets or Vault in production.
+# ──────────────────────────────────────────────
+apiVersion: v1
+kind: Secret
+metadata:
+  name: taskflow-secrets
+  namespace: taskflow
+type: Opaque
+data:
+  # This is a PLACEHOLDER. Replace with real base64-encoded value:
+  #   echo -n "your-32-char-secret" | base64
+  SECRET_KEY: Y2hhbmdlLW1lLXRvLWEtcmVhbC1zZWNyZXQta2V5LTMyY2hhcnM=

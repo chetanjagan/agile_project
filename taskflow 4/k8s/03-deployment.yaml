@@ -1,0 +1,136 @@
+# ──────────────────────────────────────────────
+#  Deployment — runs the TaskFlow app pods
+#
+#  Key concepts:
+#  • replicas: how many copies of the pod to run
+#  • rolling update: zero-downtime deployments
+#  • resource limits: prevent one app hogging CPU/RAM
+#  • probes: K8s checks if the app is alive/ready
+# ──────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taskflow-deployment
+  namespace: taskflow
+  labels:
+    app: taskflow
+    version: "1.0.0"
+spec:
+  # Number of pod replicas to run
+  # NOTE: SQLite only supports 1 writer. Use replicas: 1 for SQLite.
+  # Upgrade to PostgreSQL to use replicas > 1 safely.
+  replicas: 1
+
+  # Which pods this Deployment manages (must match pod template labels)
+  selector:
+    matchLabels:
+      app: taskflow
+
+  # Rolling update strategy — deploys new version without downtime
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0    # Never have 0 pods running during update
+      maxSurge: 1          # Temporarily spin up 1 extra pod during update
+
+  # Pod template
+  template:
+    metadata:
+      labels:
+        app: taskflow
+        version: "1.0.0"
+      annotations:
+        # Forces pod restart when config changes
+        checksum/config: "{{ include (print .Template.BasePath \"/01-config.yaml\") . | sha256sum }}"
+
+    spec:
+      # Security: don't run as root
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      containers:
+        - name: taskflow
+          # Replace with your actual image from GHCR:
+          # ghcr.io/YOUR_GITHUB_USERNAME/taskflow:latest
+          image: ghcr.io/your-username/taskflow:latest
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 5000
+              name: http
+              protocol: TCP
+
+          # Load non-sensitive config from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: taskflow-config
+
+          # Load sensitive config from Secret
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: taskflow-secrets
+                  key: SECRET_KEY
+
+          # Resource requests & limits
+          resources:
+            requests:
+              cpu: "100m"       # 0.1 CPU core minimum
+              memory: "128Mi"   # 128 MB RAM minimum
+            limits:
+              cpu: "500m"       # 0.5 CPU core maximum
+              memory: "512Mi"   # 512 MB RAM maximum
+
+          # Liveness probe: if this fails, K8s restarts the pod
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 20   # Wait 20s before first check
+            periodSeconds: 30         # Check every 30s
+            failureThreshold: 3       # Restart after 3 consecutive failures
+            timeoutSeconds: 5
+
+          # Readiness probe: if this fails, K8s removes pod from load balancer
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
+
+          # Startup probe: extra time for app to start before liveness kicks in
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            failureThreshold: 12      # Allow up to 60s startup (12 * 5s)
+            periodSeconds: 5
+
+          # Mount the persistent volume for SQLite data
+          volumeMounts:
+            - name: taskflow-data
+              mountPath: /app/instance
+
+          # Security context for the container
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false   # Flask needs to write temp files
+            capabilities:
+              drop: ["ALL"]
+
+      volumes:
+        - name: taskflow-data
+          persistentVolumeClaim:
+            claimName: taskflow-data-pvc
+
+      # Graceful shutdown: wait for requests to finish
+      terminationGracePeriodSeconds: 30
+
+      # Restart policy
+      restartPolicy: Always

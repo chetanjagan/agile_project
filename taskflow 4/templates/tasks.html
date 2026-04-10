@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}My Tasks – TaskFlow{% endblock %}
+{% block topbar_title %}My Tasks{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div class="flex-between mb-20">
+    <div>
+      <div style="font-family:var(--font);font-size:20px;font-weight:800;color:var(--text);">My Tasks</div>
+      <div style="color:var(--text2);font-size:13px;margin-top:2px;">{{ tasks|length }} task{{ 's' if tasks|length!=1 }}</div>
+    </div>
+    {% if can_write_ws %}
+    <button class="btn btn-primary" onclick="openModal('new-task-modal')"><i class="fas fa-plus"></i> New Task</button>
+    {% else %}
+    <span class="role-banner viewer" style="margin-bottom:0;padding:7px 13px;"><i class="fas fa-eye"></i> Viewer — read only access</span>
+    {% endif %}
+  </div>
+
+  <!-- Filters -->
+  <div class="card fade-in-2 mb-16" style="padding:14px 18px;">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      <div style="display:flex;align-items:center;gap:7px;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;flex:1;min-width:180px;">
+        <i class="fas fa-search" style="color:var(--text3);font-size:12px;"></i>
+        <input type="text" id="f-search" class="form-control" style="border:none;background:none;padding:0;box-shadow:none;" placeholder="Filter tasks…" oninput="applyFilters()">
+      </div>
+      <select class="form-control" style="width:140px;" id="f-status" onchange="applyFilters()">
+        <option value="">All Status</option>
+        <option value="todo">To Do</option>
+        <option value="in_progress">In Progress</option>
+        <option value="review">Review</option>
+        <option value="done">Done</option>
+      </select>
+      <select class="form-control" style="width:140px;" id="f-priority" onchange="applyFilters()">
+        <option value="">All Priority</option>
+        <option value="critical">Critical</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="clearFilters()">Clear</button>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card fade-in-3" style="padding:0;overflow:hidden;">
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:var(--surface2);border-bottom:1.5px solid var(--border);">
+          <th style="padding:11px 18px;text-align:left;font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;">Task</th>
+          <th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;">Status</th>
+          <th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;">Priority</th>
+          <th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;">Deadline</th>
+          <th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;">Project</th>
+          <th style="padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;">Progress</th>
+          <th style="padding:11px 14px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for task in tasks %}
+        <tr class="t-row" data-title="{{ task.title|lower }}" data-status="{{ task.status }}" data-priority="{{ task.priority }}" style="border-bottom:1px solid var(--border);cursor:pointer;transition:.1s;" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''">
+          <td style="padding:12px 18px;" onclick="location.href='/tasks/{{ task.id }}'">
+            <div style="font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:7px;"><span class="p-dot {{ task.priority }}"></span>{{ task.title }}</div>
+            {% if task.tags %}<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">{% for t in task.tags.split(',') if t.strip() %}<span class="tag">{{ t.strip() }}</span>{% endfor %}</div>{% endif %}
+          </td>
+          <td style="padding:12px 14px;" onclick="location.href='/tasks/{{ task.id }}'"><span class="badge badge-{{ task.status }}">{{ task.status.replace('_',' ') }}</span></td>
+          <td style="padding:12px 14px;" onclick="location.href='/tasks/{{ task.id }}'"><span class="badge badge-{{ task.priority }}">{{ task.priority }}</span></td>
+          <td style="padding:12px 14px;font-size:12px;" onclick="location.href='/tasks/{{ task.id }}'">
+            {% if task.deadline %}<span style="color:{% if task.deadline < now %}var(--red){% elif (task.deadline-now).days < 3 %}var(--amber){% else %}var(--text2){% endif %};">{{ task.deadline.strftime('%b %d, %Y') }}</span>{% else %}<span style="color:var(--text3);">—</span>{% endif %}
+          </td>
+          <td style="padding:12px 14px;font-size:12px;" onclick="location.href='/tasks/{{ task.id }}'">
+            {% if task.project %}<span style="display:flex;align-items:center;gap:5px;">{{ task.project.emoji }}<span style="color:var(--text2);">{{ task.project.name }}</span></span>{% else %}<span style="color:var(--text3);">—</span>{% endif %}
+          </td>
+          <td style="padding:12px 14px;width:110px;" onclick="location.href='/tasks/{{ task.id }}'">
+            <div style="display:flex;align-items:center;gap:7px;"><div class="progress-bar" style="flex:1;"><div class="progress-fill" style="width:{{ task.progress }}%;"></div></div><span style="font-size:10px;color:var(--text3);">{{ task.progress }}%</span></div>
+          </td>
+          <td style="padding:12px 14px;">
+            <div style="display:flex;gap:4px;">
+              <a href="/tasks/{{ task.id }}" class="btn btn-ghost btn-icon btn-sm"><i class="fas fa-eye"></i></a>
+              {% if can_write_ws %}
+              <form method="POST" action="/tasks/{{ task.id }}/delete" onsubmit="return confirm('Delete this task?')" style="display:inline;">
+                <button type="submit" class="btn btn-danger btn-icon btn-sm"><i class="fas fa-trash"></i></button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📋</div><p>No tasks yet. Create your first one!</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% include '_task_modal.html' %}
+{% endblock %}
+{% block scripts %}
+<script>
+const now = new Date();
+function applyFilters(){
+  const q=document.getElementById('f-search').value.toLowerCase();
+  const fs=document.getElementById('f-status').value;
+  const fp=document.getElementById('f-priority').value;
+  document.querySelectorAll('.t-row').forEach(r=>{
+    const ok=(!q||r.dataset.title.includes(q))&&(!fs||r.dataset.status===fs)&&(!fp||r.dataset.priority===fp);
+    r.style.display=ok?'':'none';
+  });
+}
+function clearFilters(){['f-search','f-status','f-priority'].forEach(id=>document.getElementById(id).value='');applyFilters();}
+</script>
+{% endblock %}

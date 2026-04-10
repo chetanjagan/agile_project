@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Create Account – TaskFlow</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{--accent:#4f46e5;--accent-lt:#ede9fe;--accent-hover:#4338ca;--border:#e3e7ef;--text:#0f172a;--text2:#475569;--text3:#94a3b8;--red:#dc2626;--red-lt:#fee2e2;--green:#16a34a;--green-lt:#dcfce7;}
+body{background:linear-gradient(135deg,#f0f4ff 0%,#fafbff 50%,#f5f3ff 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;padding:20px;}
+.card{background:#fff;border:1.5px solid var(--border);border-radius:16px;width:440px;max-width:95vw;padding:36px;box-shadow:0 4px 24px rgba(79,70,229,.08),0 1px 3px rgba(0,0,0,.06);}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:24px;}
+.logo-mark{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;font-weight:700;}
+.logo-text{font-family:'Plus Jakarta Sans',sans-serif;font-size:16px;font-weight:800;color:var(--text);}
+.logo-text span{color:var(--accent);}
+h1{font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;color:var(--text);margin-bottom:3px;}
+.sub{color:var(--text2);font-size:13px;margin-bottom:22px;}
+.form-group{margin-bottom:13px;}
+.form-label{display:block;margin-bottom:4px;font-size:12px;font-weight:600;color:var(--text2);}
+.form-control{width:100%;background:#fff;border:1.5px solid var(--border);border-radius:8px;padding:9px 13px;color:var(--text);outline:none;transition:.15s;font-family:'Inter',sans-serif;font-size:14px;}
+.form-control:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-lt);}
+.form-control::placeholder{color:var(--text3);}
+.btn{width:100%;padding:11px;border:none;border-radius:8px;cursor:pointer;background:var(--accent);color:#fff;font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;font-weight:700;transition:.15s;margin-top:6px;}
+.btn:hover{background:var(--accent-hover);}
+.switch{text-align:center;margin-top:18px;font-size:13px;color:var(--text2);}
+.switch a{color:var(--accent);font-weight:600;}
+.err{background:var(--red-lt);border:1.5px solid #fca5a5;border-radius:8px;padding:9px 13px;font-size:13px;color:var(--red);margin-bottom:12px;}
+.invite-box{background:var(--green-lt);border:1.5px solid #86efac;border-radius:8px;padding:11px 13px;margin-bottom:16px;font-size:12px;color:var(--green);}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo"><div class="logo-mark">⚡</div><div class="logo-text">Task<span>Flow</span></div></div>
+  <h1>Create your account</h1>
+  <p class="sub">Get started with TaskFlow — free forever</p>
+  {% if invite %}
+  <div class="invite-box">✉️ You've been invited to join <strong>{{ invite.workspace.name }}</strong> as a <strong>{{ invite.role }}</strong>. Register to accept.</div>
+  {% endif %}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+    <div class="err">⚠ {{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+  <form method="POST">
+    <div class="form-group"><label class="form-label">Username</label><input type="text" name="username" class="form-control" placeholder="yourname" required minlength="3"></div>
+    <div class="form-group"><label class="form-label">Email address</label><input type="email" name="email" class="form-control" placeholder="you@company.com" required></div>
+    <div class="form-group"><label class="form-label">Password</label><input type="password" name="password" class="form-control" placeholder="Min 6 characters" required minlength="6"></div>
+    <button type="submit" class="btn">Create Account →</button>
+  </form>
+  <div class="switch">Already have an account? <a href="/login">Sign in</a></div>
+</div>
+</body>
+</html>

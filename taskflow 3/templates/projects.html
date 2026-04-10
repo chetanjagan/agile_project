@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block title %}Projects – TaskFlow{% endblock %}
+{% block topbar_title %}Projects{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div class="flex-between mb-20">
+    <div>
+      <div style="font-family:var(--font);font-size:20px;font-weight:800;color:var(--text);">Projects</div>
+      <div style="color:var(--text2);font-size:13px;margin-top:2px;">{{ projects|length }} project{{ 's' if projects|length!=1 }} in {{ ws.name if ws else 'workspace' }}</div>
+    </div>
+    {% if can_admin_ws %}
+    <button class="btn btn-primary" onclick="openModal('new-project-modal')"><i class="fas fa-plus"></i> New Project</button>
+    {% endif %}
+  </div>
+
+  {% if projects %}
+  <div class="grid-3 fade-in-2">
+    {% for project in projects %}
+    <div style="background:#fff;border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);transition:.15s;cursor:pointer;" onclick="location.href='/projects/{{ project.id }}'" onmouseenter="this.style.borderColor='{{ project.color }}';this.style.boxShadow='var(--shadow-md)';this.style.transform='translateY(-2px)'" onmouseleave="this.style.borderColor='var(--border)';this.style.boxShadow='var(--shadow)';this.style.transform=''">
+      <div style="height:5px;background:{{ project.color }};"></div>
+      <div style="padding:18px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
+          <div style="width:44px;height:44px;border-radius:10px;background:{{ project.color }}15;border:1.5px solid {{ project.color }}30;display:flex;align-items:center;justify-content:center;font-size:22px;">{{ project.emoji }}</div>
+          <div style="display:flex;gap:5px;align-items:center;margin-top:2px;">
+            {% if project.is_private %}<span class="badge badge-medium" style="font-size:10px;"><i class="fas fa-lock"></i> Private</span>{% else %}<span class="badge badge-done" style="font-size:10px;">Public</span>{% endif %}
+          </div>
+        </div>
+        <div style="font-family:var(--font);font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px;">{{ project.name }}</div>
+        {% if project.description %}<div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5;">{{ project.description[:70] }}{% if project.description|length>70 %}…{% endif %}</div>{% endif %}
+        {% set total = project.tasks|length %}
+        {% set done = project.tasks|selectattr('status','equalto','done')|list|length %}
+        {% set pct = ((done/total*100)|int) if total else 0 %}
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px;"><span>{{ done }}/{{ total }} tasks done</span><span>{{ pct }}%</span></div>
+          <div class="progress-bar"><div class="progress-fill" style="width:{{ pct }}%;background:{{ project.color }};"></div></div>
+        </div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
+          {% set my_role = namespace(r='') %}
+          {% for pm in project.members %}{% if pm.user_id == user.id %}{% set my_role.r = pm.role %}{% endif %}{% endfor %}
+          {% if project.owner_id == user.id %}{% set my_role.r = 'admin' %}{% endif %}
+          {% if my_role.r %}<span class="badge badge-{{ my_role.r }}" style="font-size:10px;">{{ my_role.r }}</span>{% endif %}
+          <span class="chip" style="font-size:10px;">{{ project.tasks|selectattr('status','equalto','in_progress')|list|length }} active</span>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state" style="background:#fff;border:1.5px solid var(--border);border-radius:var(--radius);padding:72px;box-shadow:var(--shadow);">
+    <div class="empty-icon">📁</div>
+    <div style="font-family:var(--font);font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px;">No projects yet</div>
+    <p style="margin-bottom:16px;">Create your first project to organize your tasks</p>
+    {% if can_admin_ws %}<button class="btn btn-primary" onclick="openModal('new-project-modal')">Create Project</button>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- New Project Modal -->
+<div class="modal-overlay" id="new-project-modal">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Create New Project</div><button class="close-btn" onclick="closeModal('new-project-modal')">✕</button></div>
+    <form method="POST" action="/projects/new">
+      <div class="modal-body">
+        <div class="form-group"><label class="form-label">Project Name *</label><input type="text" name="name" class="form-control" placeholder="e.g. Website Redesign" required autofocus></div>
+        <div class="form-group"><label class="form-label">Description</label><textarea name="description" class="form-control" rows="2" placeholder="What is this project about?"></textarea></div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Icon</label>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+              {% for e in ['📁','⚡','🚀','🎨','🔧','📱','💻','🌍','🎯','🔬','📊','🛒','🎮','🏆','💡'] %}
+              <div onclick="selEmoji('{{ e }}')" class="em-opt" style="cursor:pointer;width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:17px;border:1.5px solid var(--border);transition:.12s;">{{ e }}</div>
+              {% endfor %}
+            </div>
+            <input type="hidden" name="emoji" id="em-val" value="📁">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Color</label>
+            <div style="display:flex;gap:7px;flex-wrap:wrap;">
+              {% for c in ['#4f46e5','#ec4899','#0891b2','#16a34a','#d97706','#dc2626','#7c3aed','#ea580c'] %}
+              <div onclick="selColor('{{ c }}')" class="col-opt" data-c="{{ c }}" style="cursor:pointer;width:28px;height:28px;border-radius:7px;background:{{ c }};border:3px solid transparent;transition:.12s;"></div>
+              {% endfor %}
+            </div>
+            <input type="hidden" name="color" id="col-val" value="#4f46e5">
+          </div>
+        </div>
+        <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:13px;">
+          <label class="form-check">
+            <input type="checkbox" name="is_private">
+            <div><div style="font-weight:600;font-size:13px;color:var(--text);">🔒 Private project</div><div style="font-size:12px;color:var(--text2);margin-top:2px;">Only invited members can see this project</div></div>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('new-project-modal')">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Create Project</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function selEmoji(e){document.getElementById('em-val').value=e;document.querySelectorAll('.em-opt').forEach(el=>{const s=el.textContent.trim()===e;el.style.borderColor=s?'var(--accent)':'var(--border)';el.style.background=s?'var(--accent-lt)':'';});}
+function selColor(c){document.getElementById('col-val').value=c;document.querySelectorAll('.col-opt').forEach(el=>{el.style.borderColor=el.dataset.c===c?'#1e1b4b':'transparent';el.style.transform=el.dataset.c===c?'scale(1.15)':'';});}
+selEmoji('📁');selColor('#4f46e5');
+</script>
+{% endblock %}

@@ -1,0 +1,24 @@
+# ──────────────────────────────────────────────
+#  PersistentVolumeClaim — SQLite data storage
+#
+#  This gives the app a persistent disk so the
+#  SQLite database survives pod restarts.
+#
+#  NOTE: For production with multiple replicas,
+#  switch to PostgreSQL + a proper PVC.
+# ──────────────────────────────────────────────
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: taskflow-data-pvc
+  namespace: taskflow
+  labels:
+    app: taskflow
+spec:
+  accessModes:
+    - ReadWriteOnce      # Only one pod can write at a time (fine for SQLite)
+  resources:
+    requests:
+      storage: 1Gi       # 1 gigabyte of persistent storage
+  # storageClassName: standard   # Use your cluster's storage class
+  # Leave blank to use the default storage class

@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+{% block title %}{{ project.name }} – TaskFlow{% endblock %}
+{% block topbar_title %}{{ project.emoji }} {{ project.name }}{% endblock %}
+{% block content %}
+{% set redirect_to = 'project_' ~ project.id %}
+{% set current_project = project %}
+
+<!-- Header -->
+<div class="flex-between mb-16 fade-in">
+  <div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+      <div style="font-family:var(--font);font-size:20px;font-weight:800;color:var(--text);">{{ project.emoji }} {{ project.name }}</div>
+      {% if project.is_private %}<span class="badge badge-medium"><i class="fas fa-lock"></i> Private</span>{% else %}<span class="badge badge-done">Public</span>{% endif %}
+    </div>
+    {% if project.description %}<div style="color:var(--text2);font-size:13px;">{{ project.description }}</div>{% endif %}
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    {% if proj_role == 'admin' %}<a href="/projects/{{ project.id }}/settings" class="btn btn-ghost btn-sm"><i class="fas fa-cog"></i> Settings</a>{% endif %}
+    {% if proj_role == 'admin' %}<button class="btn btn-ghost btn-sm" onclick="openModal('new-sprint-modal')"><i class="fas fa-running"></i> Sprint</button>{% endif %}
+    {% if can_write_ws and proj_role in ('admin','member') %}<button class="btn btn-primary" onclick="openModal('new-task-modal')"><i class="fas fa-plus"></i> Add Task</button>{% endif %}
+  </div>
+</div>
+
+<!-- Role banner -->
+{% if proj_role %}
+<div class="role-banner {{ proj_role }} fade-in" style="margin-bottom:16px;">
+  <i class="fas fa-{% if proj_role=='admin' %}shield{% elif proj_role=='viewer' %}eye{% else %}user{% endif %}"></i>
+  <strong>{{ proj_role|capitalize }}</strong> — {% if proj_role=='admin' %}You can manage members, settings, and all tasks.{% elif proj_role=='member' %}You can create and edit tasks.{% else %}Read-only access. Contact an admin to change your role.{% endif %}
+</div>
+{% endif %}
+
+<!-- Stats -->
+{% set total = tasks|length %}{% set done = tasks|selectattr('status','equalto','done')|list|length %}{% set pct = ((done/total*100)|int) if total else 0 %}
+<div class="grid-4 fade-in-2" style="margin-bottom:20px;">
+  <div class="stat-card"><div class="stat-accent" style="background:{{ project.color }};"></div><div class="stat-label">Tasks</div><div class="stat-value">{{ total }}</div></div>
+  <div class="stat-card"><div class="stat-accent" style="background:var(--green);"></div><div class="stat-label">Done</div><div class="stat-value">{{ done }}</div><div class="progress-bar" style="margin-top:8px;"><div class="progress-fill" style="width:{{ pct }}%;"></div></div></div>
+  <div class="stat-card"><div class="stat-accent" style="background:var(--amber);"></div><div class="stat-label">Story Points</div><div class="stat-value">{{ tasks|sum(attribute='story_points') }}</div></div>
+  <div class="stat-card"><div class="stat-accent" style="background:var(--accent);"></div><div class="stat-label">Progress</div><div class="stat-value">{{ pct }}%</div></div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs fade-in-3">
+  <div class="tab active" onclick="switchTab('kanban')">Kanban</div>
+  <div class="tab" onclick="switchTab('list')">List</div>
+  <div class="tab" onclick="switchTab('sprints')">Sprints</div>
+</div>
+
+<!-- Kanban -->
+<div class="tab-content active fade-in-4" id="tab-kanban">
+  <div class="kanban-board">
+    {% for status, label, dot_color in [('todo','To Do','#94a3b8'),('in_progress','In Progress','var(--cyan)'),('review','Review','var(--amber)'),('done','Done','var(--green)')] %}
+    <div class="kanban-col" data-status="{{ status }}">
+      <div class="kanban-col-hdr">
+        <div style="width:7px;height:7px;border-radius:50%;background:{{ dot_color }};"></div>
+        <div class="kanban-col-title">{{ label }}</div>
+        <div class="kanban-count">{{ (tasks|selectattr('status','equalto',status)|list)|length }}</div>
+      </div>
+      <div class="kanban-cards" id="col-{{ status }}" ondragover="event.preventDefault();this.classList.add('kanban-drop-target')" ondragleave="this.classList.remove('kanban-drop-target')" ondrop="drop(event,'{{ status }}')">
+        {% for task in tasks if task.status == status %}
+        <div class="k-card" draggable="{% if can_write_ws and proj_role in ('admin','member') %}true{% else %}false{% endif %}" ondragstart="drag(event,{{ task.id }})" onclick="location.href='/tasks/{{ task.id }}'">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+            <span class="p-dot {{ task.priority }}"></span>
+            <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;">{{ task.priority }}</span>
+            {% if task.story_points %}<span class="chip" style="margin-left:auto;font-size:10px;">{{ task.story_points }}pt</span>{% endif %}
+          </div>
+          <div class="k-card-title">{{ task.title }}</div>
+          {% if task.progress > 0 %}<div class="progress-bar" style="margin:6px 0;"><div class="progress-fill" style="width:{{ task.progress }}%;"></div></div>{% endif %}
+          <div class="k-card-meta">
+            {% if task.assignee %}<div class="av-sm" title="{{ task.assignee.username }}" style="width:22px;height:22px;font-size:12px;">{{ task.assignee.avatar }}</div>{% endif %}
+            {% if task.deadline %}<span class="k-card-dl {% if task.deadline < now %}overdue{% elif (task.deadline-now).days < 3 %}soon{% endif %}"><i class="fas fa-calendar"></i> {{ task.deadline.strftime('%b %d') }}</span>{% endif %}
+          </div>
+        </div>
+        {% else %}
+        <div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">No tasks</div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- List -->
+<div class="tab-content" id="tab-list">
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;">
+      <input type="text" class="form-control" style="max-width:240px;" placeholder="Filter tasks…" oninput="filterList(this.value)">
+      <select class="form-control" style="max-width:140px;" onchange="filterByStatus(this.value)">
+        <option value="">All Status</option>
+        <option value="todo">To Do</option><option value="in_progress">In Progress</option><option value="review">Review</option><option value="done">Done</option>
+      </select>
+    </div>
+    {% for task in tasks %}
+    <a href="/tasks/{{ task.id }}">
+    <div class="task-row list-row" data-status="{{ task.status }}" data-title="{{ task.title|lower }}">
+      <div class="t-check {% if task.status=='done' %}done{% endif %}">{% if task.status=='done' %}<i class="fas fa-check" style="font-size:9px;color:#fff;"></i>{% endif %}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="t-title {% if task.status=='done' %}done{% endif %}">{{ task.title }}</div>
+        <div style="display:flex;gap:6px;margin-top:3px;flex-wrap:wrap;">
+          {% for t in task.tags.split(',') if task.tags and t.strip() %}<span class="tag">{{ t.strip() }}</span>{% endfor %}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        {% if task.assignee %}<div class="av-sm" style="width:22px;height:22px;font-size:12px;" title="{{ task.assignee.username }}">{{ task.assignee.avatar }}</div>{% endif %}
+        <span class="badge badge-{{ task.priority }}">{{ task.priority }}</span>
+        <span class="badge badge-{{ task.status }}">{{ task.status.replace('_',' ') }}</span>
+        {% if task.deadline %}<span style="font-size:11px;color:{% if task.deadline < now %}var(--red){% else %}var(--text3){% endif %};">{{ task.deadline.strftime('%b %d') }}</span>{% endif %}
+      </div>
+    </div>
+    </a>
+    {% else %}<div class="empty-state"><div class="empty-icon">📋</div><p>No tasks yet.</p></div>{% endfor %}
+  </div>
+</div>
+
+<!-- Sprints -->
+<div class="tab-content" id="tab-sprints">
+  <div style="display:flex;flex-direction:column;gap:12px;">
+    {% for sprint in project.sprints %}
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:8px;">
+        <div>
+          <div style="font-family:var(--font);font-size:15px;font-weight:700;color:var(--text);">{{ sprint.name }}</div>
+          {% if sprint.goal %}<div style="font-size:12px;color:var(--text2);">{{ sprint.goal }}</div>{% endif %}
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span class="badge badge-{{ 'in_progress' if sprint.status=='active' else 'todo' }}">{{ sprint.status }}</span>
+          {% if sprint.status != 'active' and proj_role == 'admin' %}<button class="btn btn-primary btn-sm" onclick="activateSprint({{ sprint.id }})">Activate</button>{% endif %}
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text3);">{{ sprint.start_date.strftime('%b %d') if sprint.start_date else '—' }} → {{ sprint.end_date.strftime('%b %d, %Y') if sprint.end_date else '—' }}</div>
+    </div>
+    {% else %}<div class="empty-state card"><div class="empty-icon">🏃</div><p>No sprints yet.</p></div>{% endfor %}
+  </div>
+</div>
+
+<!-- Sprint modal -->
+<div class="modal-overlay" id="new-sprint-modal">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">New Sprint</div><button class="close-btn" onclick="closeModal('new-sprint-modal')">✕</button></div>
+    <form method="POST" action="/projects/{{ project.id }}/sprint/new">
+      <div class="modal-body">
+        <div class="form-group"><label class="form-label">Sprint Name *</label><input type="text" name="name" class="form-control" placeholder="Sprint 1" required></div>
+        <div class="form-group"><label class="form-label">Goal</label><input type="text" name="goal" class="form-control" placeholder="What will you accomplish?"></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Start Date</label><input type="date" name="start_date" class="form-control" required></div>
+          <div class="form-group"><label class="form-label">End Date</label><input type="date" name="end_date" class="form-control" required></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('new-sprint-modal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Sprint</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% include '_task_modal.html' %}
+{% endblock %}
+{% block scripts %}
+<script>
+const now=new Date();
+function switchTab(n){const ns=['kanban','list','sprints'];document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',ns[i]===n));document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));document.getElementById('tab-'+n).classList.add('active');}
+let dragId=null;
+function drag(e,id){dragId=id;e.dataTransfer.effectAllowed='move';}
+function drop(e,status){e.preventDefault();e.currentTarget.classList.remove('kanban-drop-target');if(!dragId)return;fetch('/api/tasks/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task_id:dragId,status:status})}).then(()=>{showToast('Task moved to '+status.replace('_',' '));setTimeout(()=>location.reload(),600);});}
+function filterList(q){document.querySelectorAll('.list-row').forEach(r=>r.style.display=r.dataset.title.includes(q.toLowerCase())?'':'none');}
+function filterByStatus(s){document.querySelectorAll('.list-row').forEach(r=>r.style.display=(!s||r.dataset.status===s)?'':'none');}
+function activateSprint(id){fetch('/sprint/'+id+'/activate',{method:'POST'}).then(()=>{showToast('Sprint activated!');setTimeout(()=>location.reload(),600);});}
+</script>
+{% endblock %}

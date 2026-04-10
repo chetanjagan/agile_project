@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% block title %}My Tasks – TaskFlow{% endblock %}
+{% block topbar_title %}My Tasks{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div class="flex-between" style="margin-bottom:24px;">
+    <div>
+      <div style="font-family:var(--font);font-size:22px;font-weight:800;">All Tasks</div>
+      <div style="color:var(--text2);font-size:13px;margin-top:2px;">{{ tasks|length }} task{{ 's' if tasks|length!=1 }}</div>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-ghost" onclick="toggleView()"><i class="fas fa-th-large" id="view-icon"></i></button>
+      {% if can_write_ws %}
+      <button class="btn btn-primary" onclick="openModal('new-task-modal')"><i class="fas fa-plus"></i> New Task</button>
+      {% else %}
+      <span class="chip" style="color:var(--amber);">👁 View only – Viewer role</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="card fade-in-2" style="margin-bottom:20px;padding:16px 20px;">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+      <input type="text" id="search" class="form-control" style="width:220px;" placeholder="🔍 Filter tasks…" oninput="applyFilters()">
+      <select class="form-control" style="width:140px;" id="f-status" onchange="applyFilters()">
+        <option value="">All Status</option>
+        <option value="todo">📌 To Do</option>
+        <option value="in_progress">⚡ In Progress</option>
+        <option value="review">👁 Review</option>
+        <option value="done">✅ Done</option>
+      </select>
+      <select class="form-control" style="width:140px;" id="f-priority" onchange="applyFilters()">
+        <option value="">All Priority</option>
+        <option value="critical">🔥 Critical</option>
+        <option value="high">🔴 High</option>
+        <option value="medium">🟡 Medium</option>
+        <option value="low">🟢 Low</option>
+      </select>
+      <select class="form-control" style="width:160px;" id="f-project" onchange="applyFilters()">
+        <option value="">All Projects</option>
+        {% for p in projects %}
+        <option value="{{ p.id }}">{{ p.emoji }} {{ p.name }}</option>
+        {% endfor %}
+      </select>
+      <select class="form-control" style="width:140px;" id="f-sort" onchange="applyFilters()">
+        <option value="deadline">Sort: Deadline</option>
+        <option value="priority">Sort: Priority</option>
+        <option value="created">Sort: Created</option>
+        <option value="title">Sort: Title</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="clearFilters()">Clear</button>
+    </div>
+  </div>
+
+  <!-- Task Table -->
+  <div class="card fade-in-3" style="padding:0;overflow:hidden;" id="task-table">
+    <table style="width:100%;border-collapse:collapse;" id="tasks-table">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border);background:var(--surface2);">
+          <th style="padding:12px 18px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;letter-spacing:.5px;text-transform:uppercase;">Task</th>
+          <th style="padding:12px 14px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;letter-spacing:.5px;text-transform:uppercase;">Status</th>
+          <th style="padding:12px 14px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;letter-spacing:.5px;text-transform:uppercase;">Priority</th>
+          <th style="padding:12px 14px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;letter-spacing:.5px;text-transform:uppercase;">Deadline</th>
+          <th style="padding:12px 14px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;letter-spacing:.5px;text-transform:uppercase;">Project</th>
+          <th style="padding:12px 14px;text-align:left;font-size:11px;color:var(--text3);font-weight:700;letter-spacing:.5px;text-transform:uppercase;">Progress</th>
+          <th style="padding:12px 14px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for task in tasks %}
+        <tr class="task-table-row" style="border-bottom:1px solid var(--border);cursor:pointer;transition:.15s;"
+            data-title="{{ task.title|lower }}"
+            data-status="{{ task.status }}"
+            data-priority="{{ task.priority }}"
+            data-project="{{ task.project_id or '' }}"
+            onmouseenter="this.style.background='var(--surface2)'"
+            onmouseleave="this.style.background=''">
+          <td style="padding:14px 18px;" onclick="location.href='/tasks/{{ task.id }}'">
+            <div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;">
+              <span class="p-dot {{ task.priority }}"></span>
+              {{ task.title }}
+            </div>
+            {% if task.tags %}
+            <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">
+              {% for tag in task.tags.split(',') if tag.strip() %}
+              <span class="tag">{{ tag.strip() }}</span>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </td>
+          <td style="padding:14px;" onclick="location.href='/tasks/{{ task.id }}'">
+            <span class="badge badge-{{ task.status }}">{{ task.status.replace('_',' ') }}</span>
+          </td>
+          <td style="padding:14px;" onclick="location.href='/tasks/{{ task.id }}'">
+            <span class="badge badge-{{ task.priority }}">{{ task.priority }}</span>
+          </td>
+          <td style="padding:14px;font-size:12px;" onclick="location.href='/tasks/{{ task.id }}'">
+            {% if task.deadline %}
+            <span style="color:{% if task.deadline < now %}var(--red){% elif (task.deadline-now).days < 3 %}var(--amber){% else %}var(--text2){% endif %}">
+              📅 {{ task.deadline.strftime('%b %d, %Y') }}
+            </span>
+            {% else %}<span style="color:var(--text3)">—</span>{% endif %}
+          </td>
+          <td style="padding:14px;font-size:12px;" onclick="location.href='/tasks/{{ task.id }}'">
+            {% if task.project %}
+            <span style="display:flex;align-items:center;gap:6px;">
+              {{ task.project.emoji }}
+              <span style="color:var(--text2);">{{ task.project.name }}</span>
+            </span>
+            {% else %}<span style="color:var(--text3)">—</span>{% endif %}
+          </td>
+          <td style="padding:14px;width:120px;" onclick="location.href='/tasks/{{ task.id }}'">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="progress-bar" style="flex:1;"><div class="progress-fill" style="width:{{ task.progress }}%"></div></div>
+              <span style="font-size:11px;color:var(--text3);min-width:28px;">{{ task.progress }}%</span>
+            </div>
+          </td>
+          <td style="padding:14px;">
+            <div style="display:flex;gap:4px;">
+              <a href="/tasks/{{ task.id }}" class="btn btn-ghost btn-icon btn-sm" title="View"><i class="fas fa-eye"></i></a>
+              {% if can_write_ws %}
+              <form method="POST" action="/tasks/{{ task.id }}/delete" onsubmit="return confirm('Delete this task?')" style="display:inline;">
+                <button type="submit" class="btn btn-danger btn-icon btn-sm" title="Delete"><i class="fas fa-trash"></i></button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7"><div class="empty-state"><div class="empty-icon">✅</div><div>No tasks yet. Create your first one!</div></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include '_task_modal.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const now = new Date();
+const priorityOrder = {critical:0,high:1,medium:2,low:3};
+
+function applyFilters(){
+  const q = document.getElementById('search').value.toLowerCase();
+  const fStatus = document.getElementById('f-status').value;
+  const fPriority = document.getElementById('f-priority').value;
+  const fProject = document.getElementById('f-project').value;
+
+  document.querySelectorAll('.task-table-row').forEach(row=>{
+    const matchTitle   = !q || row.dataset.title.includes(q);
+    const matchStatus  = !fStatus || row.dataset.status === fStatus;
+    const matchPrio    = !fPriority || row.dataset.priority === fPriority;
+    const matchProject = !fProject || row.dataset.project === fProject;
+    row.style.display = (matchTitle && matchStatus && matchPrio && matchProject) ? '' : 'none';
+  });
+}
+
+function clearFilters(){
+  ['search','f-status','f-priority','f-project'].forEach(id=>{
+    document.getElementById(id).value='';
+  });
+  applyFilters();
+}
+
+function toggleView(){
+  showToast('Switch to Kanban: open a project!', 'success');
+}
+</script>
+{% endblock %}

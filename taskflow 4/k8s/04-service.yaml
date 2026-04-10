@@ -1,0 +1,28 @@
+# ──────────────────────────────────────────────
+#  Service — stable network endpoint for pods
+#
+#  Types:
+#  • ClusterIP   — only accessible inside the cluster (default)
+#  • NodePort    — accessible on each node's IP + a port
+#  • LoadBalancer— provisions a cloud load balancer (AWS/GCP/Azure)
+# ──────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskflow-service
+  namespace: taskflow
+  labels:
+    app: taskflow
+spec:
+  # ClusterIP: other pods in the cluster reach this service by name
+  # The Ingress will route external traffic to this Service
+  type: ClusterIP
+
+  selector:
+    app: taskflow     # Route to pods with this label
+
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80          # Port the Service listens on
+      targetPort: 5000  # Port on the Pod (Gunicorn)

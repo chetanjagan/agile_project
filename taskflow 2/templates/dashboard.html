@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard – TaskFlow{% endblock %}
+{% block topbar_title %}Dashboard{% endblock %}
+{% block content %}
+<div class="fade-in">
+<!-- Welcome Banner -->
+<div style="background:linear-gradient(135deg,rgba(124,109,250,0.15),rgba(244,113,181,0.08));border:1px solid rgba(124,109,250,0.2);border-radius:18px;padding:28px 32px;margin-bottom:28px;display:flex;align-items:center;justify-content:space-between;">
+  <div>
+    <div style="font-family:var(--font);font-size:26px;font-weight:800;margin-bottom:6px;">
+      Good {{ 'morning' if now.hour < 12 else ('afternoon' if now.hour < 18 else 'evening') }}, {{ user.avatar }} {{ user.username }}!
+    </div>
+    <div style="color:var(--text2);font-size:14px;">
+      Here's what's happening with your tasks today.
+      {% if ws_role %}
+      &nbsp;·&nbsp;
+      <span class="badge badge-{{ ws_role }}" style="font-size:11px;">
+        {% if ws_role=='owner' %}👑{% elif ws_role=='admin' %}⚡{% elif ws_role=='viewer' %}👁{% else %}👤{% endif %}
+        {{ ws_role }} in {{ ws.name if ws else 'workspace' }}
+      </span>
+      {% endif %}
+    </div>
+  </div>
+  {% if can_write_ws %}
+  <button class="btn btn-primary" onclick="openModal('new-task-modal')">
+    <i class="fas fa-plus"></i> New Task
+  </button>
+  {% else %}
+  <span class="chip" style="color:var(--text3);">👁 View only</span>
+  {% endif %}
+</div>
+
+<!-- Stats Grid -->
+<div class="grid-4 fade-in-2" style="margin-bottom:28px;">
+  <div class="stat-card" style="--accent-color:linear-gradient(90deg,#7c6dfa,#a594f9)">
+    <div class="stat-icon">📋</div>
+    <div class="stat-label">Total Tasks</div>
+    <div class="stat-value">{{ stats.total }}</div>
+    <div class="stat-sub">across all projects</div>
+  </div>
+  <div class="stat-card" style="--accent-color:linear-gradient(90deg,#4ade80,#22d3ee)">
+    <div class="stat-icon">✅</div>
+    <div class="stat-label">Completed</div>
+    <div class="stat-value">{{ stats.done }}</div>
+    <div class="stat-sub">{{ ((stats.done/stats.total*100)|int) if stats.total else 0 }}% completion rate</div>
+  </div>
+  <div class="stat-card" style="--accent-color:linear-gradient(90deg,#22d3ee,#7c6dfa)">
+    <div class="stat-icon">⚡</div>
+    <div class="stat-label">In Progress</div>
+    <div class="stat-value">{{ stats.in_progress }}</div>
+    <div class="stat-sub">actively working</div>
+  </div>
+  <div class="stat-card" style="--accent-color:linear-gradient(90deg,#f87171,#f471b5)">
+    <div class="stat-icon">🔥</div>
+    <div class="stat-label">Overdue</div>
+    <div class="stat-value" style="color:{% if stats.overdue %}var(--red){% else %}var(--green){% endif %}">{{ stats.overdue }}</div>
+    <div class="stat-sub">{% if stats.overdue %}needs attention{% else %}all on track!{% endif %}</div>
+  </div>
+</div>
+
+<div class="grid-2 fade-in-3" style="margin-bottom:28px;gap:20px;">
+  <!-- Recent Tasks -->
+  <div class="card">
+    <div class="flex-between" style="margin-bottom:18px;">
+      <div class="section-title">My Tasks</div>
+      <a href="/tasks" class="btn btn-ghost btn-sm">View all</a>
+    </div>
+    {% if my_tasks %}
+    {% for task in my_tasks %}
+    <a href="/tasks/{{ task.id }}">
+    <div class="task-row">
+      <div class="task-check {% if task.status=='done' %}done{% endif %}">
+        {% if task.status == 'done' %}<i class="fas fa-check" style="font-size:9px;color:#fff;"></i>{% endif %}
+      </div>
+      <div class="task-title-wrap">
+        <div class="task-title {% if task.status=='done' %}done{% endif %}">{{ task.title }}</div>
+        <div class="task-sub">
+          {% if task.project %}<span>📁 {{ task.project.name }}</span>{% endif %}
+          {% if task.deadline %}
+            · <span class="{% if task.deadline < now %}overdue{% endif %}">
+              📅 {{ task.deadline.strftime('%b %d') }}
+            </span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="task-meta">
+        <span class="badge badge-{{ task.priority }}"><span class="p-dot {{ task.priority }}"></span>{{ task.priority }}</span>
+        <span class="badge badge-{{ task.status }}">{{ task.status.replace('_',' ') }}</span>
+      </div>
+    </div>
+    </a>
+    {% endfor %}
+    {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">🎉</div>
+      <div>No tasks yet – create one!</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Projects + Alerts -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+    <!-- Due Soon / Overdue Alerts -->
+    {% if overdue or due_soon %}
+    <div class="card" style="border-color:rgba(248,113,113,0.3);">
+      <div class="section-title" style="margin-bottom:14px;color:var(--red);">⚠️ Needs Attention</div>
+      {% for task in overdue %}
+      <a href="/tasks/{{ task.id }}">
+      <div class="task-row">
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:500;">{{ task.title }}</div>
+          <div style="font-size:11px;color:var(--red);">Overdue: {{ task.deadline.strftime('%b %d') }}</div>
+        </div>
+        <span class="badge" style="background:rgba(248,113,113,0.15);color:var(--red);">Overdue</span>
+      </div>
+      </a>
+      {% endfor %}
+      {% for task in due_soon %}
+      <a href="/tasks/{{ task.id }}">
+      <div class="task-row">
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:500;">{{ task.title }}</div>
+          <div style="font-size:11px;color:var(--amber);">Due: {{ task.deadline.strftime('%b %d') }}</div>
+        </div>
+        <span class="badge" style="background:rgba(251,191,36,0.15);color:var(--amber);">Due Soon</span>
+      </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Projects -->
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:16px;">
+        <div class="section-title">Projects</div>
+        <a href="/projects" class="btn btn-ghost btn-sm">View all</a>
+      </div>
+      {% if projects %}
+      {% for project in projects %}
+      <a href="/projects/{{ project.id }}">
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;">
+        <div style="width:36px;height:36px;border-radius:10px;background:{{ project.color }}22;border:1px solid {{ project.color }}44;display:flex;align-items:center;justify-content:center;font-size:18px;">{{ project.emoji }}</div>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:600;">{{ project.name }}</div>
+          <div style="font-size:11px;color:var(--text3);">{{ project.tasks|length }} tasks</div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);">
+          {% set done_c = project.tasks|selectattr('status','equalto','done')|list|length %}
+          {% if project.tasks|length %}
+          {{ ((done_c/project.tasks|length)*100)|int }}%
+          {% else %}0%{% endif %}
+        </div>
+      </div>
+      </a>
+      {% endfor %}
+      {% else %}
+      <div style="text-align:center;color:var(--text3);font-size:13px;padding:20px;">
+        No projects yet. <a href="/projects" style="color:var(--accent2);">Create one →</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- New Task Modal -->
+{% include '_task_modal.html' %}
+
+{% endblock %}
+{% block scripts %}
+<script>
+const now = new Date();
+</script>
+{% endblock %}

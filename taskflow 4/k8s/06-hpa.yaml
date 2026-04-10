@@ -1,0 +1,55 @@
+# ──────────────────────────────────────────────
+#  HorizontalPodAutoscaler (HPA)
+#
+#  Automatically adds/removes pods based on load.
+#  Requires metrics-server installed:
+#    kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+#
+#  NOTE: Only works well with stateless apps or
+#  PostgreSQL. With SQLite use minReplicas: 1.
+# ──────────────────────────────────────────────
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: taskflow-hpa
+  namespace: taskflow
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: taskflow-deployment
+
+  minReplicas: 1    # Always keep at least 1 pod running
+  maxReplicas: 3    # Never exceed 3 pods
+
+  metrics:
+    # Scale up when CPU > 70%
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+    # Scale up when Memory > 80%
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+  # Stabilization windows prevent thrashing (scaling up and down rapidly)
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60    # Wait 60s before scaling up again
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300   # Wait 5 mins before scaling down
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120

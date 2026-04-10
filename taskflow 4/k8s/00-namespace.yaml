@@ -1,0 +1,11 @@
+# ──────────────────────────────────────────────
+#  Kubernetes Namespace
+#  Isolates all TaskFlow resources in one group
+# ──────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: taskflow
+  labels:
+    app: taskflow
+    environment: production

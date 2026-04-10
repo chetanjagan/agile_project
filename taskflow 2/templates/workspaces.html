@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block title %}Workspaces – TaskFlow{% endblock %}
+{% block topbar_title %}Workspaces{% endblock %}
+{% block content %}
+<div class="fade-in">
+  <div class="flex-between" style="margin-bottom:24px;">
+    <div>
+      <div style="font-family:var(--font);font-size:22px;font-weight:800;">🏢 Your Workspaces</div>
+      <div style="color:var(--text2);font-size:13px;margin-top:2px;">{{ workspaces|length }} workspace{{ 's' if workspaces|length!=1 }}</div>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('new-ws-modal')"><i class="fas fa-plus"></i> New Workspace</button>
+  </div>
+
+  <div class="grid-3 fade-in-2">
+    {% for w in workspaces %}
+    <div style="background:var(--surface);border:1px solid {% if ws and w.id==ws.id %}rgba(124,109,250,0.4){% else %}var(--border){% endif %};border-radius:var(--radius);overflow:hidden;transition:.2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+      <div style="height:4px;background:linear-gradient(90deg,var(--accent),var(--pink));"></div>
+      <div style="padding:20px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
+          <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,rgba(124,109,250,0.2),rgba(244,113,181,0.1));border:1px solid rgba(124,109,250,0.2);display:flex;align-items:center;justify-content:center;font-size:24px;">{{ w.avatar }}</div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            {% if ws and w.id==ws.id %}<span class="badge-done badge" style="font-size:10px;">Active</span>{% endif %}
+            <span class="chip">{{ w.plan }}</span>
+          </div>
+        </div>
+        <div style="font-family:var(--font);font-size:16px;font-weight:800;margin-bottom:4px;">{{ w.name }}</div>
+        {% if w.description %}<div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5;">{{ w.description[:80] }}{% if w.description|length>80 %}…{% endif %}</div>{% endif %}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
+          <span class="chip">{{ w.members|length }} member{{ 's' if w.members|length!=1 }}</span>
+          <span class="chip">{{ w.projects|length }} project{{ 's' if w.projects|length!=1 }}</span>
+        </div>
+        <div style="display:flex;gap:8px;">
+          {% if not (ws and w.id==ws.id) %}
+          <a href="/workspaces/{{ w.id }}/switch" class="btn btn-primary btn-sm" style="flex:1;justify-content:center;">Switch</a>
+          {% else %}
+          <span class="btn btn-success btn-sm" style="flex:1;justify-content:center;cursor:default;">✓ Current</span>
+          {% endif %}
+          <a href="/workspaces/{{ w.id }}/settings" class="btn btn-ghost btn-sm btn-icon"><i class="fas fa-cog"></i></a>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty-state" style="grid-column:1/-1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:60px;">
+      <div class="empty-icon">🏢</div>
+      <div style="font-family:var(--font);font-size:18px;font-weight:700;margin-bottom:8px;">No workspaces yet</div>
+      <div style="color:var(--text2);margin-bottom:16px;">Create your first workspace to get started</div>
+      <button class="btn btn-primary" onclick="openModal('new-ws-modal')">Create Workspace</button>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

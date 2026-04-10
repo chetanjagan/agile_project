@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard – TaskFlow{% endblock %}
+{% block topbar_title %}Dashboard{% endblock %}
+{% block content %}
+<div class="fade-in">
+
+<!-- Welcome -->
+<div style="background:#fff;border:1.5px solid var(--border);border-radius:var(--radius);padding:22px 24px;margin-bottom:22px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);">
+  <div>
+    <div style="font-family:var(--font);font-size:22px;font-weight:800;color:var(--text);margin-bottom:4px;">
+      Good {{ 'morning' if now.hour < 12 else ('afternoon' if now.hour < 18 else 'evening') }}, {{ user.avatar }} {{ user.username }}!
+    </div>
+    <div style="color:var(--text2);font-size:13px;display:flex;align-items:center;gap:8px;">
+      Here's your workspace overview
+      {% if ws_role %}
+      <span class="badge badge-{{ ws_role }}">
+        {% if ws_role=='owner' %}👑{% elif ws_role=='admin' %}⚡{% elif ws_role=='viewer' %}👁{% else %}👤{% endif %}
+        {{ ws_role }} · {{ ws.name if ws else '' }}
+      </span>
+      {% endif %}
+    </div>
+  </div>
+  {% if can_write_ws %}
+  <button class="btn btn-primary" onclick="openModal('new-task-modal')"><i class="fas fa-plus"></i> New Task</button>
+  {% else %}
+  <span class="chip" style="color:var(--text3);"><i class="fas fa-eye"></i> View only</span>
+  {% endif %}
+</div>
+
+<!-- Stats -->
+<div class="grid-4 fade-in-2" style="margin-bottom:22px;">
+  <div class="stat-card">
+    <div class="stat-accent" style="background:linear-gradient(90deg,var(--accent),#7c3aed);"></div>
+    <div class="stat-icon-wrap" style="background:var(--accent-lt);"><i class="fas fa-list-check" style="color:var(--accent);"></i></div>
+    <div class="stat-label">Total Tasks</div>
+    <div class="stat-value">{{ stats.total }}</div>
+    <div class="stat-sub">All assigned tasks</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-accent" style="background:linear-gradient(90deg,var(--green),#22c55e);"></div>
+    <div class="stat-icon-wrap" style="background:var(--green-lt);"><i class="fas fa-circle-check" style="color:var(--green);"></i></div>
+    <div class="stat-label">Completed</div>
+    <div class="stat-value">{{ stats.done }}</div>
+    <div class="stat-sub">{{ ((stats.done/stats.total*100)|int) if stats.total else 0 }}% completion rate</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-accent" style="background:linear-gradient(90deg,var(--cyan),#06b6d4);"></div>
+    <div class="stat-icon-wrap" style="background:var(--cyan-lt);"><i class="fas fa-spinner" style="color:var(--cyan);"></i></div>
+    <div class="stat-label">In Progress</div>
+    <div class="stat-value">{{ stats.in_progress }}</div>
+    <div class="stat-sub">Actively working</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-accent" style="background:linear-gradient(90deg,var(--red),#ef4444);"></div>
+    <div class="stat-icon-wrap" style="background:var(--red-lt);"><i class="fas fa-triangle-exclamation" style="color:var(--red);"></i></div>
+    <div class="stat-label">Overdue</div>
+    <div class="stat-value" style="color:{% if stats.overdue %}var(--red){% else %}var(--green){% endif %};">{{ stats.overdue }}</div>
+    <div class="stat-sub">{% if stats.overdue %}Needs attention{% else %}All on track!{% endif %}</div>
+  </div>
+</div>
+
+<div class="grid-2 fade-in-3" style="margin-bottom:22px;">
+  <!-- My Tasks -->
+  <div class="card" style="padding:0;">
+    <div style="padding:16px 20px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);">
+      <div class="section-title">My Tasks</div>
+      <a href="/tasks" class="btn btn-ghost btn-sm">View all <i class="fas fa-arrow-right"></i></a>
+    </div>
+    {% if my_tasks %}
+    {% for task in my_tasks %}
+    <a href="/tasks/{{ task.id }}">
+    <div class="task-row">
+      <div class="t-check {% if task.status=='done' %}done{% endif %}">
+        {% if task.status=='done' %}<i class="fas fa-check" style="font-size:9px;color:#fff;"></i>{% endif %}
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div class="t-title {% if task.status=='done' %}done{% endif %}">{{ task.title }}</div>
+        <div class="t-sub">
+          {% if task.project %}📁 {{ task.project.name }}{% endif %}
+          {% if task.deadline %} · 📅 <span style="color:{% if task.deadline < now %}var(--red){% elif (task.deadline-now).days < 3 %}var(--amber){% else %}var(--text3){% endif %};">{{ task.deadline.strftime('%b %d') }}</span>{% endif %}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+        <span class="p-dot {{ task.priority }}"></span>
+        <span class="badge badge-{{ task.status }}" style="font-size:10px;">{{ task.status.replace('_',' ') }}</span>
+      </div>
+    </div>
+    </a>
+    {% endfor %}
+    {% else %}
+    <div class="empty-state"><div class="empty-icon">✅</div><p>No tasks yet — create one!</p></div>
+    {% endif %}
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:14px;">
+    <!-- Alerts -->
+    {% if overdue or due_soon %}
+    <div class="card" style="border-color:#fca5a5;padding:0;">
+      <div style="padding:12px 16px;border-bottom:1px solid #fee2e2;display:flex;align-items:center;gap:8px;">
+        <i class="fas fa-triangle-exclamation" style="color:var(--red);"></i>
+        <span style="font-family:var(--font);font-size:14px;font-weight:700;color:var(--red);">Needs Attention</span>
+      </div>
+      {% for task in overdue %}
+      <a href="/tasks/{{ task.id }}">
+      <div class="task-row" style="border-color:#fee2e2;">
+        <div style="flex:1;"><div style="font-size:13px;font-weight:500;">{{ task.title }}</div><div style="font-size:11px;color:var(--red);">Overdue: {{ task.deadline.strftime('%b %d') }}</div></div>
+        <span class="badge badge-high">Overdue</span>
+      </div></a>
+      {% endfor %}
+      {% for task in due_soon %}
+      <a href="/tasks/{{ task.id }}">
+      <div class="task-row" style="border-color:#fef3c7;">
+        <div style="flex:1;"><div style="font-size:13px;font-weight:500;">{{ task.title }}</div><div style="font-size:11px;color:var(--amber);">Due soon: {{ task.deadline.strftime('%b %d') }}</div></div>
+        <span class="badge badge-medium">Due Soon</span>
+      </div></a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Projects -->
+    <div class="card" style="padding:0;">
+      <div style="padding:16px 20px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);">
+        <div class="section-title">Projects</div>
+        <a href="/projects" class="btn btn-ghost btn-sm">View all</a>
+      </div>
+      {% if projects %}
+      {% for p in projects %}
+      <a href="/projects/{{ p.id }}">
+      <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:.1s;" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''">
+        <div style="width:34px;height:34px;border-radius:9px;background:{{ p.color }}18;border:1.5px solid {{ p.color }}40;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;">{{ p.emoji }}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:var(--text);">{{ p.name }} {% if p.is_private %}<i class="fas fa-lock" style="font-size:10px;color:var(--amber);"></i>{% endif %}</div>
+          {% set done_c = p.tasks|selectattr('status','equalto','done')|list|length %}
+          {% set pct = ((done_c/p.tasks|length*100)|int) if p.tasks|length else 0 %}
+          <div class="progress-bar" style="margin-top:4px;"><div class="progress-fill" style="width:{{ pct }}%;background:{{ p.color }};"></div></div>
+        </div>
+        <span style="font-size:11px;color:var(--text3);flex-shrink:0;">{{ pct }}%</span>
+      </div>
+      </a>
+      {% endfor %}
+      {% else %}
+      <div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">No projects — <a href="/projects" style="color:var(--accent);font-weight:600;">create one →</a></div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+</div>
+{% include '_task_modal.html' %}
+{% endblock %}
